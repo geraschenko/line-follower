@@ -1,0 +1,57 @@
+{
+  "name": "line-follower",
+  "version": "0.1.0",
+  "description": "Follow an append-only file line by line, like tail -F, with byte offsets",
+  "keywords": [
+    "tail",
+    "follow",
+    "jsonl",
+    "ndjson",
+    "lines",
+    "fs.watch"
+  ],
+  "license": "Apache-2.0",
+  "author": "Anton Geraschenko <geraschenko@gmail.com>",
+  "homepage": "https://github.com/geraschenko/line-follower#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/geraschenko/line-follower.git"
+  },
+  "bugs": {
+    "url": "https://github.com/geraschenko/line-follower/issues"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.map"
+  ],
+  "engines": {
+    "node": ">=22.19"
+  },
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "prepare": "npm run build",
+    "check": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "fmt": "treefmt",
+    "presubmit": "npm run check && npm run lint && treefmt --fail-on-change && npm test",
+    "ready": "npm run fmt && npm run presubmit",
+    "release": "scripts/release.sh"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.39.4",
+    "prettier": "^3.9.1",
+    "typescript": "^5.8.0",
+    "typescript-eslint": "^8.61.0"
+  }
+}
