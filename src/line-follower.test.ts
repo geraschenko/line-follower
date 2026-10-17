@@ -75,7 +75,7 @@ test(
         kind: "line",
         line: { text: '{"a":1}', lineNumber: 1, byteOffset: 0, byteLength: 8 },
       },
-      { kind: "read", endOffset: 12 },
+      { kind: "read", endOffset: 12, atEnd: true },
     ]);
   },
 );
@@ -201,7 +201,7 @@ test("restarts from byte 0 after truncation", (t) => {
   assert.deepEqual(r.events.at(-3), { kind: "restart", cause: "truncated" });
 });
 
-test("reads a file larger than one chunk", (t) => {
+test("reads a file larger than one chunk; only the last read is atEnd", (t) => {
   const line = "x".repeat(999);
   const path = tempFile(t, `${line}\n`.repeat(3_000));
   const r = recorder();
@@ -209,7 +209,9 @@ test("reads a file larger than one chunk", (t) => {
   t.after(() => follower.close());
   follower.drain();
   assert.equal(r.texts().length, 3_000);
-  assert.ok(r.events.filter((e) => e.kind === "read").length > 1);
+  const atEnds = r.events.flatMap((e) => (e.kind === "read" ? [e.atEnd] : []));
+  assert.ok(atEnds.length > 1);
+  assert.deepEqual(atEnds, [...atEnds.slice(0, -1).map(() => false), true]);
 });
 
 test("throws when the file is missing at start", (t) => {

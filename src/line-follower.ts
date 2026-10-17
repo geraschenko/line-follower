@@ -12,8 +12,9 @@ import { LineReader, type Line } from "./line-reader.ts";
 
 export type FollowEvent =
   | { kind: "line"; line: Line }
-  /** Emitted after the lines this read completed. */
-  | { kind: "read"; endOffset: number }
+  /** Emitted after the lines this read completed. `atEnd`: the read reached
+   *  the file's size as of this read; later appends arrive as new reads. */
+  | { kind: "read"; endOffset: number; atEnd: boolean }
   /** Later lines and offsets start from byte 0 of the file now at the path. */
   | { kind: "restart"; cause: "replaced" | "truncated" }
   /** Terminal: the follower is closed. */
@@ -166,8 +167,12 @@ function readChunk(cursor: Cursor, size: number): Step {
   return {
     cursor: { ...cursor, offset },
     events: [
+      // `read` comes last so that a consumer acting on it acts after this
+      // read's lines: one that tells its scheduler "more is coming" when
+      // !atEnd must say so after sending them, or their own arrival would
+      // end the wait.
       ...lines.map((line): FollowEvent => ({ kind: "line", line })),
-      { kind: "read", endOffset: offset },
+      { kind: "read", endOffset: offset, atEnd: offset === size },
     ],
   };
 }

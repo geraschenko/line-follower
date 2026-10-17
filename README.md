@@ -14,7 +14,7 @@ const follower = followLines("records.jsonl", (event) => {
     case "line": // { text, lineNumber, byteOffset, byteLength }
       apply(JSON.parse(event.line.text));
       break;
-    case "read": // every byte before endOffset has been consumed
+    case "read": // every byte before endOffset is consumed; atEnd: caught up
       break;
     case "restart": // the file was replaced or truncated; lines start over
       state = emptyState();
@@ -60,9 +60,15 @@ or when you call `drain()`.
 | Event                                                   | Meaning                                                                                                       |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `{ kind: "line", line }`                                | One complete line, in file order.                                                                             |
-| `{ kind: "read", endOffset }`                           | Sent after the lines a read completed. If `endOffset` is past the last line's end, part of a line is waiting. |
+| `{ kind: "read", endOffset, atEnd }`                    | Sent after the lines a read completed. If `endOffset` is past the last line's end, part of a line is waiting. |
 | `{ kind: "restart", cause: "replaced" \| "truncated" }` | Later lines come from byte 0 of the file now at the path, numbered from 1. Discard what you derived.          |
 | `{ kind: "failed", error }`                             | Terminal; the follower is closed. For example, the path no longer exists.                                     |
+
+`atEnd` says a read reached the file's size as of that read. A backlog larger
+than one chunk arrives as several reads, and only the last has `atEnd`.
+
+A read's lines come before its `read` event, all in one synchronous call; no
+other callback runs between them.
 
 On replacement, the old file is read to its end first; its unfinished last
 line, if any, is dropped.
