@@ -14,41 +14,55 @@ const NEWLINE = "\n".charCodeAt(0);
  *  line) until its
  *  newline arrives. Delivers every line, blank ones included. `text` is
  *  exactly the bytes before the "\n", including any "\r". Splitting before
- *  decoding keeps a UTF-8 code point split across chunks intact. */
+ *  decoding keeps a UTF-8 code point split across chunks intact. Each push
+ *  scans only its own chunk and a torn line is joined once, when its newline
+ *  arrives, so a line torn across many pushes costs time linear in its
+ *  length. */
 export class LineReader {
-  private tornSuffix = Buffer.alloc(0);
+  /** The torn suffix, one piece per push that extended it. */
+  private tornPieces: Buffer[] = [];
+  private tornLength = 0;
   private lineNumber = 0;
   private bytesPushed = 0;
 
   push(chunk: Buffer): Line[] {
-    const dataByteOffset = this.bytesPushed - this.tornSuffix.length;
+    const chunkByteOffset = this.bytesPushed;
     this.bytesPushed += chunk.length;
-    const data =
-      this.tornSuffix.length === 0
-        ? chunk
-        : Buffer.concat([this.tornSuffix, chunk]);
     const lines: Line[] = [];
     let lineStart = 0;
     for (
-      let lineEnd = data.indexOf(NEWLINE);
+      let lineEnd = chunk.indexOf(NEWLINE);
       lineEnd !== -1;
-      lineEnd = data.indexOf(NEWLINE, lineStart)
+      lineEnd = chunk.indexOf(NEWLINE, lineStart)
     ) {
+      // Only the chunk's first line can continue the torn suffix.
+      const tornLength = this.tornLength;
+      const text =
+        tornLength === 0
+          ? chunk.toString("utf8", lineStart, lineEnd)
+          : Buffer.concat([
+              ...this.tornPieces,
+              chunk.subarray(0, lineEnd),
+            ]).toString("utf8");
+      this.tornPieces = [];
+      this.tornLength = 0;
       this.lineNumber += 1;
       lines.push({
-        text: data.toString("utf8", lineStart, lineEnd),
+        text,
         lineNumber: this.lineNumber,
-        byteOffset: dataByteOffset + lineStart,
-        byteLength: lineEnd + 1 - lineStart,
+        byteOffset: chunkByteOffset + lineStart - tornLength,
+        byteLength: lineEnd + 1 - lineStart + tornLength,
       });
       lineStart = lineEnd + 1;
     }
-    // Copied, not a subarray view: a view would pin the (possibly large)
-    // chunk for as long as the line stays torn.
-    this.tornSuffix =
-      lineStart === data.length
-        ? Buffer.alloc(0)
-        : Buffer.from(data.subarray(lineStart));
+    if (lineStart < chunk.length) {
+      // Copied, not a subarray view: a view would pin the (possibly large)
+      // chunk for as long as the line stays torn, and the caller may reuse
+      // the chunk's memory.
+      const piece = Buffer.from(chunk.subarray(lineStart));
+      this.tornPieces.push(piece);
+      this.tornLength += piece.length;
+    }
     return lines;
   }
 }
